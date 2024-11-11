@@ -1,0 +1,76 @@
+import tensorflow as tf
+from tensorflow.keras import layers, models
+import numpy as np
+
+# Define constants for the model
+num_vms = 20  # Display results for 20 VMs
+time_steps = 168  # Past 7 days, 1-hour intervals
+features = 4  # Memory, CPU, Disk Read, Disk Write
+# Adjusted thresholds for demonstration
+thresholds = {'memory': 0.5, 'cpu': 0.5, 'disk_read': 0.5, 'disk_write': 0.5} 
+
+# Define the WBATimeNet model with two outputs: migration feasibility and migration time
+def WBATimeNet(input_shape):
+    inputs = layers.Input(shape=input_shape)
+    
+    # CNN Layer
+    x = layers.Conv1D(filters=64, kernel_size=3, activation='relu')(inputs)
+    
+    # LSTM Layer
+    x = layers.LSTM(128, return_sequences=True)(x)
+    x = layers.LSTM(64)(x)
+    
+    # Dense Layer
+    x = layers.Dense(32, activation='relu')(x)
+    
+    # Output for migration feasibility ("Go" or "No-go")
+    migration_decision = layers.Dense(1, activation='sigmoid', name="migration_decision")(x)
+    
+    # Output for migration time prediction (0-23.99 hours)
+    migration_time = layers.Dense(1, activation='linear', name="migration_time")(x)
+    
+    model = models.Model(inputs=inputs, outputs=[migration_decision, migration_time])
+    return model
+
+# Initialize and compile the model with two outputs
+model = WBATimeNet(input_shape=(time_steps, features))
+model.compile(optimizer='adam', 
+              loss={'migration_decision': 'binary_crossentropy', 'migration_time': 'mse'},
+              metrics={'migration_decision': 'accuracy', 'migration_time': 'mse'})
+
+# Generate simulated data with a mix of "Go" and "No-go" labels
+X_train = np.random.rand(num_vms, time_steps, features)  # Simulated data for 20 VMs
+y_decision_train = np.array([1 if i % 2 == 0 else 0 for i in range(num_vms)])  # Alternating "Go" and "No-go"
+y_time_train = np.random.uniform(0, 24, num_vms)  # Unique migration times within 24 hours
+
+# Train the model with more epochs for better learning
+print("Starting model training...")
+model.fit(X_train, {'migration_decision': y_decision_train, 'migration_time': y_time_train}, 
+          epochs=15, batch_size=4)
+
+# Function to check if all performance metrics are below threshold
+def evaluate_migration(vm_data):
+    for i, counter in enumerate(['memory', 'cpu', 'disk_read', 'disk_write']):
+        max_usage = np.max(vm_data[:, i])  # Get max usage for each counter over time
+        if max_usage > thresholds[counter]:
+            return "No-go", max_usage
+    return "Go", None
+
+# Predict migration feasibility and time for each VM
+print("\nRunning migration predictions on VM data...")
+for i in range(num_vms):
+    vm_data = X_train[i]  # Data for each VM
+    decision, max_usage = evaluate_migration(vm_data)
+    migration_decision, migration_time = model.predict(np.expand_dims(vm_data, axis=0))
+    
+    # Adding slight random noise to create variation in migration times
+    migration_status = "Go" if migration_decision[0][0] > 0.5 else "No-go"
+    migration_time_decimal = migration_time[0][0] + np.random.uniform(-0.5, 0.5)  # Adding slight variability
+    
+    # Format the suggested migration time
+    if migration_status == "Go":
+        hours = int(migration_time_decimal) % 24  # Ensures time stays within 0-23 hours
+        minutes = int((migration_time_decimal - hours) * 60)
+        print(f"VM {i+1}: Model Prediction = {migration_status}, Suggested Migration Time = {hours:02d}:{minutes:02d}")
+    else:
+        print(f"VM {i+1}: Model Prediction = {migration_status}, Suggested Migration Time = N/A")
