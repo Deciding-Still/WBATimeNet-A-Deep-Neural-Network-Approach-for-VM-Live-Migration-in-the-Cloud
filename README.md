@@ -36,7 +36,7 @@ The LSTM unit captures long-term dependencies in VM resource usage, helping the 
 
 The WBATimeNet model combines CNN, LSTM, and adversarial training techniques. Adversarial examples help the model remain robust under challenging usage patterns. The model loss is a combination of the main and adversarial losses, which enhances its predictive accuracy and resilience.
 
-![WBATimeNet Architecture](./path/to/WBATimeNet_image.jpeg)
+![WBATimeNet Architecture](https://github.com/Deciding-Still/WBATimeNet-A-Deep-Neural-Network-Approach-for-VM-Live-Migration-in-the-Cloud/blob/main/LSTM.png)
 
 ## Installation
 
